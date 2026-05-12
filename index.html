@@ -328,6 +328,27 @@
           refreshSchema(db);
         } catch (e) { setQueryTime(null); setQueryError(e.message); }
       }
+      function handleExportCsv() {
+        if (!queryResults || queryResults.length === 0) return;
+        var result = queryResults[0];
+        var csvRows = [];
+        // Header row
+        csvRows.push(result.columns.map(function(col) {
+          return '"' + String(col).replace(/"/g, '""') + '"';
+        }).join(","));
+        // Data rows
+        result.values.forEach(function(row) {
+          csvRows.push(row.map(function(cell) {
+            if (cell == null) return "";
+            return '"' + String(cell).replace(/"/g, '""') + '"';
+          }).join(","));
+        });
+        var csv = csvRows.join("\n");
+        var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a"); a.href = url; a.download = "query_results.csv"; a.click();
+        URL.revokeObjectURL(url);
+      }
 
       // ── Styles ──
       var sToolbar = { display: "flex", alignItems: "center", gap: "2px", padding: "4px 8px", background: c.toolbarBg, borderBottom: "1px solid " + c.border, flexShrink: 0 };
@@ -364,7 +385,8 @@
           <button style=${sToolBtn} onClick=${handleNewDb}><${IconNew} /> New Database</button>
           <button style=${sToolBtn} onClick=${handleOpenDb}><${IconFolder} /> Open Database</button>
           <div style=${sToolSep} />
-          <button style=${{ ...sToolBtn, opacity: db ? 1 : 0.4 }} onClick=${handleSaveDb} disabled=${!db}><${IconSave} /> Write Changes</button>
+          <button style=${{ ...sToolBtn, opacity: queryResults && queryResults.length >= 0 ? 1 : 0.4 }} onClick=${handleSaveDb} disabled=${!queryResults}><${IconSave} /> Write Changes</button>
+          <button style=${{ ...sToolBtn, opacity: queryResults && queryResults.length > 0 ? 1 : 0.4 }} onClick=${handleExportCsv} disabled=${!queryResults || queryResults.length === 0}>Export CSV</button>
           <div style=${{ marginLeft: "auto", fontSize: "12px", color: c.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}>${dbName || "No database loaded"}</div>
         </div>
 
