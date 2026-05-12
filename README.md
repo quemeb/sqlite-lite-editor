@@ -1,6 +1,6 @@
 # SQLite Lite Editor
 
-A free, browser-based SQLite database editor modeled after [DB Browser for SQLite](https://sqlitebrowser.org/). Open, browse, query, and edit `.db` files — everything runs locally in your browser with no install required.
+A free, browser-based SQLite database editor modeled after [DB Browser for SQLite](https://sqlitebrowser.org/). Open, browse, query, and edit `.db` files — everything runs locally in your browser with no install required at https://quemeb.github.io/sqlite-lite-editor/. 
 
 Works on **Chromebooks, iPads, Macs, Windows, Linux** — any device with a modern web browser.
 
