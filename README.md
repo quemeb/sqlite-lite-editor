@@ -1,8 +1,12 @@
 # SQLite Lite Editor
 
-A free, browser-based SQLite database editor. Open, browse, query, and edit `.db` files — everything runs locally in your browser with no install required.
+A free, browser-based SQLite database editor modeled after [DB Browser for SQLite](https://sqlitebrowser.org/). Open, browse, query, and edit `.db` files — everything runs locally in your browser with no install required.
 
 Works on **Chromebooks, iPads, Macs, Windows, Linux** — any device with a modern web browser.
+
+## Why This Exists
+
+DB Browser for SQLite is a great desktop tool, but it can't be installed on Chromebooks or iPads. Other online alternatives like sqliteonline.com work, but their interface looks completely different — which can be confusing if you're following tutorials or videos that use DB Browser. SQLite Lite Editor gives you a familiar DB Browser-style layout (Database Structure, Browse Data, and Execute SQL tabs) that runs entirely in the browser.
 
 ## Features
 
