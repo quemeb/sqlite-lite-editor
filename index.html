@@ -4,164 +4,284 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SQLite Lite Editor</title>
-  <meta name="description" content="A free, browser-based SQLite database editor. Open, browse, query, and edit .db files — everything runs locally, no install required." />
+  <meta name="description" content="A free, browser-based SQLite database editor modeled after DB Browser for SQLite. No install required — works on Chromebooks, iPads, and any device." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%230060c0' stroke-width='3'><ellipse cx='32' cy='16' rx='20' ry='7'/><path d='M12 16v28c0 3.9 8.9 7 20 7s20-3.1 20-7V16'/><path d='M12 27c0 3.9 8.9 7 20 7s20-3.1 20-7'/><path d='M12 38c0 3.9 8.9 7 20 7s20-3.1 20-7'/></svg>" />
+  <!-- CodeMirror 5 CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body, #root { height: 100%; overflow: hidden; }
     body { font-family: 'Segoe UI', 'Liberation Sans', 'DejaVu Sans', Tahoma, sans-serif; }
+    .cm-s-db-browser.CodeMirror { background: #fff; color: #1a1a1a; font-size: 13px; line-height: 1.5; }
+    .cm-s-db-browser .CodeMirror-gutters { background: #f0f0f0; border-right: 1px solid #d0d0d0; }
+    .cm-s-db-browser .CodeMirror-linenumber { color: #888; font-size: 12px; }
+    .cm-s-db-browser .CodeMirror-cursor { border-left-color: #1a1a1a; }
+    .cm-s-db-browser .CodeMirror-selected { background: #c8ddf8; }
+    .cm-s-db-browser .cm-keyword { color: #0000ff; font-weight: bold; }
+    .cm-s-db-browser .cm-builtin { color: #800080; }
+    .cm-s-db-browser .cm-string { color: #a31515; }
+    .cm-s-db-browser .cm-string-2 { color: #a31515; }
+    .cm-s-db-browser .cm-number { color: #098658; }
+    .cm-s-db-browser .cm-comment { color: #008000; font-style: italic; }
+    .cm-s-db-browser .cm-operator { color: #1a1a1a; }
+    .cm-s-db-browser .cm-def { color: #795e26; }
+    .cm-s-db-browser .cm-variable-2 { color: #1a1a1a; }
+    .cm-s-db-browser .cm-type { color: #267f99; font-weight: bold; }
+    .cm-s-db-browser .CodeMirror-activeline-background { background: #f5f5dc; }
+    .CodeMirror { height: 100% !important; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <!-- React from CDN -->
+  <!-- Dependencies (no Babel needed) -->
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
   <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-  <!-- Babel for JSX -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
-  <!-- sql.js -->
+  <script src="https://unpkg.com/htm@3.1.1/dist/htm.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/sql/sql.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/selection/active-line.min.js"></script>
 
-  <script type="text/babel" data-type="module">
-    const { useState, useEffect, useRef, useCallback } = React;
-
+  <script>
+    // htm — JSX alternative using tagged template literals, no Babel needed
+    const html = htm.bind(React.createElement);
+    const { useState, useEffect, useRef, useCallback, Fragment } = React;
     const SQL_WASM_CDN = "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.wasm";
 
-    // ── Icon components ──
-    const IconFolder = () => (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+    // ── SVG Icons ──
+    function IconFolder() {
+      return html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M2 4v8a1 1 0 001 1h10a1 1 0 001-1V6a1 1 0 00-1-1H8L6.5 3.5A1 1 0 005.8 3H3a1 1 0 00-1 1z"/>
-      </svg>
-    );
-    const IconSave = () => (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      </svg>`;
+    }
+    function IconSave() {
+      return html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M3 2h8l2 2v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/>
         <path d="M5 2v4h5V2M5 14v-4h6v4"/>
-      </svg>
-    );
-    const IconNew = () => (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      </svg>`;
+    }
+    function IconNew() {
+      return html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M3 2h6l3 3v8a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/>
         <path d="M8 7v4M6 9h4"/>
-      </svg>
-    );
-    const IconPlay = () => (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M4 2l10 6-10 6V2z"/>
-      </svg>
-    );
-    const IconTable = () => (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      </svg>`;
+    }
+    function IconPlay() {
+      return html`<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 2l10 6-10 6V2z"/></svg>`;
+    }
+    function IconTable() {
+      return html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <rect x="1" y="2" width="14" height="12" rx="1"/><path d="M1 5.5h14M1 9h14M5.5 5.5v8.5"/>
-      </svg>
-    );
-    const IconIndex = () => (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      </svg>`;
+    }
+    function IconIndex() {
+      return html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M4 3v10M8 3v10M12 3v10M2 6h12M2 10h12"/>
-      </svg>
-    );
-    const IconView = () => (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      </svg>`;
+    }
+    function IconView() {
+      return html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/>
-      </svg>
-    );
-    const IconTrigger = () => (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      </svg>`;
+    }
+    function IconTrigger() {
+      return html`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
         <path d="M9 2L5 9h4l-2 5 6-7H9l2-5z"/>
-      </svg>
-    );
-    const IconChevron = ({ open }) => (
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
-        style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+      </svg>`;
+    }
+    function IconChevron(props) {
+      return html`<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"
+        style=${{ transform: props.open ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
         <path d="M3 1l5 4-5 4V1z"/>
-      </svg>
-    );
+      </svg>`;
+    }
+
+    // ── Colors ──
+    var c = {
+      bg: "#f0f0f0", panelBg: "#fff", border: "#c0c0c0",
+      toolbarBg: "#f5f5f5", tabActive: "#fff", tabInactive: "#e0e0e0",
+      tabBorder: "#a0a0a0", text: "#1a1a1a", textMuted: "#666",
+      accent: "#0060c0", treeBg: "#fafafa",
+      gridHeader: "#e8ecf0", gridRowAlt: "#f6f8fa", gridBorder: "#dde1e6",
+      errorBg: "#fff0f0", errorText: "#c00000",
+      successBg: "#f0fff0", successText: "#006000",
+      btnBg: "#e8e8e8", btnBorder: "#b0b0b0",
+    };
+
+    // ── DataGrid ──
+    function DataGrid(props) {
+      var columns = props.columns || [];
+      var rows = props.rows || [];
+      if (columns.length === 0) {
+        return html`<div style=${{ flex: 1, overflow: "auto", fontSize: "12px" }}>
+          <div style=${{ padding: "20px", color: c.textMuted, textAlign: "center" }}>No data</div>
+        </div>`;
+      }
+      return html`<div style=${{ flex: 1, overflow: "auto", fontSize: "12px" }}>
+        <table style=${{ width: "100%", borderCollapse: "collapse", tableLayout: "auto" }}>
+          <thead><tr>
+            <th style=${{ position: "sticky", top: 0, background: c.gridHeader, padding: "5px 10px", textAlign: "center", fontWeight: 600, borderBottom: "2px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, whiteSpace: "nowrap", fontSize: "12px", zIndex: 1, color: c.textMuted, width: "50px" }}>#</th>
+            ${columns.map(function(col, i) {
+              return html`<th key=${i} style=${{ position: "sticky", top: 0, background: c.gridHeader, padding: "5px 10px", textAlign: "left", fontWeight: 600, borderBottom: "2px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, whiteSpace: "nowrap", fontSize: "12px", zIndex: 1 }}>${col}</th>`;
+            })}
+          </tr></thead>
+          <tbody>
+            ${rows.map(function(row, ri) {
+              return html`<tr key=${ri} style=${{ background: ri % 2 ? c.gridRowAlt : "transparent" }}>
+                <td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, whiteSpace: "nowrap", fontSize: "12px", color: c.textMuted, textAlign: "center" }}>${ri + 1}</td>
+                ${row.map(function(cell, ci) {
+                  return html`<td key=${ci} style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, whiteSpace: "nowrap", maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", fontSize: "12px" }} title=${cell == null ? "NULL" : String(cell)}>
+                    ${cell == null ? html`<span style=${{ color: "#aaa", fontStyle: "italic" }}>NULL</span>` : String(cell)}
+                  </td>`;
+                })}
+              </tr>`;
+            })}
+          </tbody>
+        </table>
+      </div>`;
+    }
+
+    // ── SqlEditor (CodeMirror wrapper) ──
+    function SqlEditor(props) {
+      var containerRef = useRef(null);
+      var cmRef = useRef(null);
+      var onRunRef = useRef(props.onRun);
+      onRunRef.current = props.onRun;
+
+      useEffect(function() {
+        if (!containerRef.current || cmRef.current) return;
+        var editor = CodeMirror(containerRef.current, {
+          value: props.value || "",
+          mode: "text/x-sqlite",
+          theme: "db-browser",
+          lineNumbers: true,
+          matchBrackets: true,
+          styleActiveLine: true,
+          indentWithTabs: true,
+          tabSize: 4,
+          extraKeys: {
+            "Ctrl-Enter": function() { onRunRef.current && onRunRef.current(); },
+            "Cmd-Enter": function() { onRunRef.current && onRunRef.current(); },
+          },
+        });
+        editor.on("change", function(cm) {
+          props.onChange && props.onChange(cm.getValue());
+        });
+        cmRef.current = editor;
+      }, []);
+
+      useEffect(function() {
+        if (cmRef.current && cmRef.current.getValue() !== props.value) {
+          cmRef.current.setValue(props.value || "");
+        }
+      }, [props.value]);
+
+      useEffect(function() {
+        var t = setTimeout(function() { if (cmRef.current) cmRef.current.refresh(); }, 50);
+        return function() { clearTimeout(t); };
+      });
+
+      return html`<div ref=${containerRef} style=${{ flex: 1, overflow: "auto", borderBottom: "1px solid " + c.gridBorder }} />`;
+    }
+
+    // ── TreeSection ──
+    function TreeSection(props) {
+      return html`<div>
+        <div style=${{ display: "flex", alignItems: "center", gap: "6px", padding: "5px 10px", cursor: "pointer", fontWeight: 600, fontSize: "12px", color: c.text, borderBottom: "1px solid " + c.gridBorder }}
+          onClick=${props.onToggle}>
+          <${IconChevron} open=${props.open} />
+          ${props.icon}
+          <span>${props.label} (${props.items.length})</span>
+        </div>
+        ${props.open && props.items.map(function(item, i) { return props.renderItem(item, i); })}
+      </div>`;
+    }
 
     // ── Main App ──
     function App() {
-      const [SQL, setSQL] = useState(null);
-      const [db, setDb] = useState(null);
-      const [loading, setLoading] = useState(true);
-      const [error, setError] = useState(null);
-      const [dbName, setDbName] = useState(null);
+      var _SQL = useState(null), SQL = _SQL[0], setSQL = _SQL[1];
+      var _db = useState(null), db = _db[0], setDb = _db[1];
+      var _loading = useState(true), loading = _loading[0], setLoading = _loading[1];
+      var _error = useState(null), error = _error[0], setError = _error[1];
+      var _dbName = useState(null), dbName = _dbName[0], setDbName = _dbName[1];
 
-      const [activeTab, setActiveTab] = useState("structure");
-      const [tables, setTables] = useState([]);
-      const [indexes, setIndexes] = useState([]);
-      const [views, setViews] = useState([]);
-      const [triggers, setTriggers] = useState([]);
-      const [tableColumns, setTableColumns] = useState({});
+      var _activeTab = useState("structure"), activeTab = _activeTab[0], setActiveTab = _activeTab[1];
+      var _tables = useState([]), tables = _tables[0], setTables = _tables[1];
+      var _indexes = useState([]), indexes = _indexes[0], setIndexes = _indexes[1];
+      var _views = useState([]), views = _views[0], setViews = _views[1];
+      var _triggers = useState([]), triggers = _triggers[0], setTriggers = _triggers[1];
+      var _tableColumns = useState({}), tableColumns = _tableColumns[0], setTableColumns = _tableColumns[1];
 
-      const [browseTable, setBrowseTable] = useState("");
-      const [browseData, setBrowseData] = useState({ columns: [], rows: [] });
-      const [browseFilter, setBrowseFilter] = useState("");
+      var _browseTable = useState(""), browseTable = _browseTable[0], setBrowseTable = _browseTable[1];
+      var _browseData = useState({ columns: [], rows: [] }), browseData = _browseData[0], setBrowseData = _browseData[1];
+      var _browseFilter = useState(""), browseFilter = _browseFilter[0], setBrowseFilter = _browseFilter[1];
 
-      const [sqlText, setSqlText] = useState("");
-      const [queryResults, setQueryResults] = useState(null);
-      const [queryError, setQueryError] = useState(null);
-      const [queryTime, setQueryTime] = useState(null);
+      var _sqlText = useState(""), sqlText = _sqlText[0], setSqlText = _sqlText[1];
+      var _queryResults = useState(null), queryResults = _queryResults[0], setQueryResults = _queryResults[1];
+      var _queryError = useState(null), queryError = _queryError[0], setQueryError = _queryError[1];
+      var _queryTime = useState(null), queryTime = _queryTime[0], setQueryTime = _queryTime[1];
 
-      const [treeOpen, setTreeOpen] = useState({ tables: true, indexes: false, views: false, triggers: false });
+      var _treeOpen = useState({ tables: true, indexes: false, views: false, triggers: false }), treeOpen = _treeOpen[0], setTreeOpen = _treeOpen[1];
 
-      const fileInputRef = useRef(null);
-      const sqlTextareaRef = useRef(null);
+      var fileInputRef = useRef(null);
+      var browseTableRef = useRef(browseTable);
+      browseTableRef.current = browseTable;
 
       // Load sql.js
-      useEffect(() => {
-        initSqlJs({ locateFile: () => SQL_WASM_CDN })
-          .then((sql) => { setSQL(sql); setLoading(false); })
-          .catch((e) => { setError("Failed to load SQL engine: " + e.message); setLoading(false); });
+      useEffect(function() {
+        initSqlJs({ locateFile: function() { return SQL_WASM_CDN; } })
+          .then(function(sql) { setSQL(sql); setLoading(false); })
+          .catch(function(e) { setError("Failed to load SQL engine: " + e.message); setLoading(false); });
       }, []);
 
       // Refresh schema
-      const refreshSchema = useCallback((database) => {
+      var refreshSchema = useCallback(function(database) {
         if (!database) return;
         try {
-          const t = database.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
-          const tableNames = t.length ? t[0].values.map(r => r[0]) : [];
+          var t = database.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+          var tableNames = t.length ? t[0].values.map(function(r) { return r[0]; }) : [];
           setTables(tableNames);
 
-          const ix = database.exec("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name");
-          setIndexes(ix.length ? ix[0].values.map(r => r[0]) : []);
+          var ix = database.exec("SELECT name FROM sqlite_master WHERE type='index' ORDER BY name");
+          setIndexes(ix.length ? ix[0].values.map(function(r) { return r[0]; }) : []);
 
-          const v = database.exec("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name");
-          setViews(v.length ? v[0].values.map(r => r[0]) : []);
+          var v = database.exec("SELECT name FROM sqlite_master WHERE type='view' ORDER BY name");
+          setViews(v.length ? v[0].values.map(function(r) { return r[0]; }) : []);
 
-          const tr = database.exec("SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name");
-          setTriggers(tr.length ? tr[0].values.map(r => r[0]) : []);
+          var tr = database.exec("SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name");
+          setTriggers(tr.length ? tr[0].values.map(function(r) { return r[0]; }) : []);
 
-          const cols = {};
-          tableNames.forEach(tn => {
+          var cols = {};
+          tableNames.forEach(function(tn) {
             try {
-              const info = database.exec('PRAGMA table_info("' + tn.replace(/"/g, '""') + '")');
-              cols[tn] = info.length ? info[0].values.map(r => ({ name: r[1], type: r[2], notnull: r[3], pk: r[5] })) : [];
+              var info = database.exec('PRAGMA table_info("' + tn.replace(/"/g, '""') + '")');
+              cols[tn] = info.length ? info[0].values.map(function(r) { return { name: r[1], type: r[2], notnull: r[3], pk: r[5] }; }) : [];
             } catch(e) { cols[tn] = []; }
           });
           setTableColumns(cols);
 
-          if (tableNames.length && !tableNames.includes(browseTable)) {
+          if (tableNames.length && !tableNames.includes(browseTableRef.current)) {
             setBrowseTable(tableNames[0]);
           }
         } catch (e) { console.error("Schema refresh error:", e); }
-      }, [browseTable]);
+      }, []);
 
       // Load browse data
-      useEffect(() => {
+      useEffect(function() {
         if (!db || !browseTable) { setBrowseData({ columns: [], rows: [] }); return; }
         try {
-          const safeName = '"' + browseTable.replace(/"/g, '""') + '"';
-          let query = "SELECT * FROM " + safeName;
-          if (browseFilter.trim()) {
-            query += " WHERE " + browseFilter;
-          }
+          var safeName = '"' + browseTable.replace(/"/g, '""') + '"';
+          var query = "SELECT * FROM " + safeName;
+          if (browseFilter.trim()) query += " WHERE " + browseFilter;
           query += " LIMIT 1000";
-          const result = db.exec(query);
+          var result = db.exec(query);
           if (result.length) {
             setBrowseData({ columns: result[0].columns, rows: result[0].values });
           } else {
-            const info = db.exec("PRAGMA table_info(" + safeName + ")");
-            setBrowseData({ columns: info.length ? info[0].values.map(r => r[1]) : [], rows: [] });
+            var info = db.exec("PRAGMA table_info(" + safeName + ")");
+            setBrowseData({ columns: info.length ? info[0].values.map(function(r) { return r[1]; }) : [], rows: [] });
           }
         } catch (e) {
           setBrowseData({ columns: [], rows: [], error: e.message });
@@ -169,477 +289,239 @@
       }, [db, browseTable, browseFilter]);
 
       // Handlers
-      const handleNewDb = () => {
+      function handleNewDb() {
         if (!SQL) return;
         if (db) db.close();
-        const newDb = new SQL.Database();
-        setDb(newDb);
-        setDbName("New Database");
-        refreshSchema(newDb);
-        setActiveTab("sql");
-        setSqlText("");
-        setQueryResults(null);
-        setQueryError(null);
-      };
-
-      const handleOpenDb = () => { fileInputRef.current?.click(); };
-
-      const handleFileChange = async (e) => {
-        const file = e.target.files?.[0];
+        var newDb = new SQL.Database();
+        setDb(newDb); setDbName("New Database"); refreshSchema(newDb);
+        setActiveTab("sql"); setSqlText(""); setQueryResults(null); setQueryError(null);
+      }
+      function handleOpenDb() { fileInputRef.current && fileInputRef.current.click(); }
+      function handleFileChange(e) {
+        var file = e.target.files && e.target.files[0];
         if (!file || !SQL) return;
-        try {
-          const buf = await file.arrayBuffer();
+        file.arrayBuffer().then(function(buf) {
           if (db) db.close();
-          const newDb = new SQL.Database(new Uint8Array(buf));
-          setDb(newDb);
-          setDbName(file.name);
-          refreshSchema(newDb);
-          setActiveTab("structure");
-          setBrowseFilter("");
-          setSqlText("");
-          setQueryResults(null);
-          setQueryError(null);
-        } catch (err) { setError("Failed to open database: " + err.message); }
+          var newDb = new SQL.Database(new Uint8Array(buf));
+          setDb(newDb); setDbName(file.name); refreshSchema(newDb);
+          setActiveTab("structure"); setBrowseFilter("");
+          setSqlText(""); setQueryResults(null); setQueryError(null);
+        }).catch(function(err) { setError("Failed to open database: " + err.message); });
         e.target.value = "";
-      };
-
-      const handleSaveDb = () => {
+      }
+      function handleSaveDb() {
         if (!db) return;
-        const data = db.export();
-        const blob = new Blob([data], { type: "application/x-sqlite3" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = dbName || "database.db";
-        a.click();
+        var data = db.export();
+        var blob = new Blob([data], { type: "application/x-sqlite3" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a"); a.href = url; a.download = dbName || "database.db"; a.click();
         URL.revokeObjectURL(url);
-      };
-
-      const handleRunSql = () => {
+      }
+      function handleRunSql() {
         if (!db || !sqlText.trim()) return;
-        setQueryError(null);
-        setQueryResults(null);
-        const start = performance.now();
+        setQueryError(null); setQueryResults(null);
+        var start = performance.now();
         try {
-          const results = db.exec(sqlText);
-          const elapsed = performance.now() - start;
-          setQueryTime(elapsed);
+          var results = db.exec(sqlText);
+          setQueryTime(performance.now() - start);
           setQueryResults(results.length ? results : []);
           refreshSchema(db);
-        } catch (e) {
-          setQueryTime(null);
-          setQueryError(e.message);
-        }
-      };
-
-      const handleKeyDown = (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-          e.preventDefault();
-          handleRunSql();
-        }
-      };
-
-      // ── Colors ──
-      const c = {
-        bg: "#f0f0f0", panelBg: "#ffffff", border: "#c0c0c0",
-        toolbarBg: "#f5f5f5", tabActive: "#ffffff", tabInactive: "#e0e0e0",
-        tabBorder: "#a0a0a0", text: "#1a1a1a", textMuted: "#666666",
-        accent: "#0060c0", treeBg: "#fafafa",
-        gridHeader: "#e8ecf0", gridRowAlt: "#f6f8fa", gridBorder: "#dde1e6",
-        errorBg: "#fff0f0", errorText: "#c00000",
-        successBg: "#f0fff0", successText: "#006000",
-        btnBg: "#e8e8e8", btnBorder: "#b0b0b0",
-      };
+        } catch (e) { setQueryTime(null); setQueryError(e.message); }
+      }
 
       // ── Styles ──
-      const s = {
-        app: {
-          fontFamily: "'Segoe UI', 'Liberation Sans', 'DejaVu Sans', Tahoma, sans-serif",
-          fontSize: "13px", color: c.text, height: "100vh",
-          display: "flex", flexDirection: "column", background: c.bg, overflow: "hidden",
-        },
-        toolbar: {
-          display: "flex", alignItems: "center", gap: "2px",
-          padding: "4px 8px", background: c.toolbarBg,
-          borderBottom: "1px solid " + c.border, flexShrink: 0,
-        },
-        toolBtn: {
-          display: "flex", alignItems: "center", gap: "5px",
-          padding: "4px 10px", border: "1px solid " + c.btnBorder,
-          borderRadius: "3px", background: c.btnBg, color: c.text,
-          cursor: "pointer", fontSize: "12px", whiteSpace: "nowrap",
-        },
-        toolSep: { width: "1px", height: "22px", background: c.border, margin: "0 6px" },
-        dbLabel: {
-          marginLeft: "auto", fontSize: "12px", color: c.textMuted,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px",
-        },
-        tabBar: {
-          display: "flex", gap: "0px", padding: "0 8px",
-          paddingTop: "6px", background: c.bg, flexShrink: 0,
-        },
-        tab: function(active) {
-          return {
-            padding: "6px 16px",
-            border: "1px solid " + c.tabBorder,
-            borderBottom: active ? "1px solid " + c.tabActive : "1px solid " + c.tabBorder,
-            borderRadius: "4px 4px 0 0",
-            background: active ? c.tabActive : c.tabInactive,
-            cursor: "pointer", fontSize: "12.5px",
-            fontWeight: active ? "600" : "400",
-            color: c.text, marginBottom: "-1px", zIndex: active ? 2 : 1,
-          };
-        },
-        mainArea: {
-          flex: 1, display: "flex", flexDirection: "column",
-          background: c.panelBg, border: "1px solid " + c.tabBorder,
-          margin: "0 8px 8px 8px", borderRadius: "0 0 4px 4px", overflow: "hidden",
-        },
-        gridTable: { width: "100%", borderCollapse: "collapse", tableLayout: "auto" },
-        gridTh: {
-          position: "sticky", top: 0, background: c.gridHeader,
-          padding: "5px 10px", textAlign: "left", fontWeight: "600",
-          borderBottom: "2px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder,
-          whiteSpace: "nowrap", fontSize: "12px", zIndex: 1,
-        },
-        gridTd: {
-          padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder,
-          borderRight: "1px solid " + c.gridBorder, whiteSpace: "nowrap",
-          maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", fontSize: "12px",
-        },
-        treeHeader: {
-          display: "flex", alignItems: "center", gap: "6px",
-          padding: "5px 10px", cursor: "pointer", fontWeight: "600",
-          fontSize: "12px", color: c.text, borderBottom: "1px solid " + c.gridBorder,
-        },
-        treeItem: {
-          display: "flex", alignItems: "center", gap: "6px",
-          padding: "3px 10px 3px 28px", fontSize: "12px", cursor: "pointer", color: c.text,
-        },
-        treeCol: {
-          display: "flex", alignItems: "center", gap: "6px",
-          padding: "2px 10px 2px 46px", fontSize: "11px", color: c.textMuted,
-        },
-        sqlEditor: {
-          width: "100%", flex: 1, minHeight: "120px", padding: "8px 10px",
-          fontFamily: "'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace",
-          fontSize: "13px", border: "none", borderBottom: "1px solid " + c.gridBorder,
-          outline: "none", resize: "none", background: "#fafbfc", color: c.text, lineHeight: "1.5",
-        },
-        sqlToolbar: {
-          display: "flex", alignItems: "center", gap: "8px",
-          padding: "4px 8px", background: c.toolbarBg,
-          borderBottom: "1px solid " + c.gridBorder, flexShrink: 0,
-        },
-        runBtn: {
-          display: "flex", alignItems: "center", gap: "5px",
-          padding: "4px 14px", border: "1px solid " + c.accent,
-          borderRadius: "3px", background: c.accent, color: "#ffffff",
-          cursor: "pointer", fontSize: "12px", fontWeight: "600",
-        },
-        browseToolbar: {
-          display: "flex", alignItems: "center", gap: "8px",
-          padding: "6px 10px", background: c.toolbarBg,
-          borderBottom: "1px solid " + c.gridBorder, flexShrink: 0,
-        },
-        select: {
-          padding: "3px 8px", border: "1px solid " + c.btnBorder,
-          borderRadius: "3px", fontSize: "12px", background: "#fff", color: c.text,
-        },
-        filterInput: {
-          flex: 1, padding: "3px 8px", border: "1px solid " + c.btnBorder,
-          borderRadius: "3px", fontSize: "12px", color: c.text, maxWidth: "400px",
-        },
-        statusBar: {
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "3px 10px", background: c.toolbarBg,
-          borderTop: "1px solid " + c.gridBorder, fontSize: "11px",
-          color: c.textMuted, flexShrink: 0,
-        },
-        msgBox: function(type) {
-          return {
-            margin: "10px", padding: "10px 14px", borderRadius: "4px",
-            fontSize: "12px", fontFamily: "monospace",
-            background: type === "error" ? c.errorBg : c.successBg,
-            color: type === "error" ? c.errorText : c.successText,
-            border: "1px solid " + (type === "error" ? "#f0c0c0" : "#c0f0c0"),
-            whiteSpace: "pre-wrap", wordBreak: "break-all",
-          };
-        },
-        welcome: {
-          flex: 1, display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          gap: "16px", color: c.textMuted, padding: "40px", textAlign: "center",
-        },
-      };
+      var sToolbar = { display: "flex", alignItems: "center", gap: "2px", padding: "4px 8px", background: c.toolbarBg, borderBottom: "1px solid " + c.border, flexShrink: 0 };
+      var sToolBtn = { display: "flex", alignItems: "center", gap: "5px", padding: "4px 10px", border: "1px solid " + c.btnBorder, borderRadius: "3px", background: c.btnBg, color: c.text, cursor: "pointer", fontSize: "12px", whiteSpace: "nowrap" };
+      var sToolSep = { width: "1px", height: "22px", background: c.border, margin: "0 6px" };
+      var sStatusBar = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 10px", background: c.toolbarBg, borderTop: "1px solid " + c.gridBorder, fontSize: "11px", color: c.textMuted, flexShrink: 0 };
 
-      // ── Subcomponents ──
-      const TreeSection = ({ label, icon, items, stateKey, renderItem }) => (
-        <div>
-          <div style={s.treeHeader} onClick={() => setTreeOpen(p => ({ ...p, [stateKey]: !p[stateKey] }))}>
-            <IconChevron open={treeOpen[stateKey]} />
-            {icon}
-            <span>{label} ({items.length})</span>
-          </div>
-          {treeOpen[stateKey] && items.map((item, i) => renderItem(item, i))}
-        </div>
-      );
+      function tabStyle(active) {
+        return { padding: "6px 16px", border: "1px solid " + c.tabBorder, borderBottom: active ? "1px solid " + c.tabActive : "1px solid " + c.tabBorder, borderRadius: "4px 4px 0 0", background: active ? c.tabActive : c.tabInactive, cursor: "pointer", fontSize: "12.5px", fontWeight: active ? 600 : 400, color: c.text, marginBottom: "-1px", zIndex: active ? 2 : 1 };
+      }
+      function msgBox(type) {
+        return { margin: "10px", padding: "10px 14px", borderRadius: "4px", fontSize: "12px", fontFamily: "monospace", background: type === "error" ? c.errorBg : c.successBg, color: type === "error" ? c.errorText : c.successText, border: "1px solid " + (type === "error" ? "#f0c0c0" : "#c0f0c0"), whiteSpace: "pre-wrap", wordBreak: "break-all" };
+      }
 
-      const DataGrid = ({ columns, rows }) => (
-        <div style={{ flex: 1, overflow: "auto", fontSize: "12px" }}>
-          {columns.length === 0 ? (
-            <div style={{ padding: "20px", color: c.textMuted, textAlign: "center" }}>No data</div>
-          ) : (
-            <table style={s.gridTable}>
-              <thead>
-                <tr>
-                  <th style={{ ...s.gridTh, color: c.textMuted, width: "50px", textAlign: "center" }}>#</th>
-                  {columns.map((col, i) => <th key={i} style={s.gridTh}>{col}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, ri) => (
-                  <tr key={ri} style={{ background: ri % 2 ? c.gridRowAlt : "transparent" }}>
-                    <td style={{ ...s.gridTd, color: c.textMuted, textAlign: "center" }}>{ri + 1}</td>
-                    {row.map((cell, ci) => (
-                      <td key={ci} style={s.gridTd} title={cell == null ? "NULL" : String(cell)}>
-                        {cell == null
-                          ? <span style={{ color: "#aaa", fontStyle: "italic" }}>NULL</span>
-                          : String(cell)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      );
-
-      // ── Render ──
+      // ── Loading / Error ──
       if (loading) {
-        return (
-          <div style={{ ...s.app, alignItems: "center", justifyContent: "center" }}>
-            <div style={{ fontSize: "14px", color: c.textMuted }}>Loading SQLite engine...</div>
-          </div>
-        );
+        return html`<div style=${{ fontFamily: "'Segoe UI', sans-serif", fontSize: "13px", color: c.text, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: c.bg }}>
+          <div style=${{ fontSize: "14px", color: c.textMuted }}>Loading SQLite engine...</div>
+        </div>`;
       }
       if (error) {
-        return (
-          <div style={{ ...s.app, alignItems: "center", justifyContent: "center" }}>
-            <div style={s.msgBox("error")}>{error}</div>
-          </div>
-        );
+        return html`<div style=${{ fontFamily: "'Segoe UI', sans-serif", fontSize: "13px", color: c.text, height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: c.bg }}>
+          <div style=${msgBox("error")}>${error}</div>
+        </div>`;
       }
 
-      return (
-        <div style={s.app}>
-          <input ref={fileInputRef} type="file" accept=".db,.sqlite,.sqlite3,.db3,.s3db,.sl3"
-            style={{ display: "none" }} onChange={handleFileChange} />
+      // ── Main Render ──
+      return html`<div style=${{ fontFamily: "'Segoe UI', 'Liberation Sans', 'DejaVu Sans', Tahoma, sans-serif", fontSize: "13px", color: c.text, height: "100vh", display: "flex", flexDirection: "column", background: c.bg, overflow: "hidden" }}>
 
-          {/* Toolbar */}
-          <div style={s.toolbar}>
-            <button style={s.toolBtn} onClick={handleNewDb} title="New Database">
-              <IconNew /> New Database
-            </button>
-            <button style={s.toolBtn} onClick={handleOpenDb} title="Open Database">
-              <IconFolder /> Open Database
-            </button>
-            <div style={s.toolSep} />
-            <button style={{ ...s.toolBtn, opacity: db ? 1 : 0.4 }} onClick={handleSaveDb} disabled={!db} title="Save Database">
-              <IconSave /> Write Changes
-            </button>
-            <div style={s.dbLabel}>{dbName || "No database loaded"}</div>
-          </div>
+        <input ref=${fileInputRef} type="file" accept=".db,.sqlite,.sqlite3,.db3,.s3db,.sl3" style=${{ display: "none" }} onChange=${handleFileChange} />
 
-          {/* Tab Bar */}
-          <div style={s.tabBar}>
-            <div style={s.tab(activeTab === "structure")} onClick={() => setActiveTab("structure")}>Database Structure</div>
-            <div style={s.tab(activeTab === "browse")} onClick={() => setActiveTab("browse")}>Browse Data</div>
-            <div style={s.tab(activeTab === "sql")} onClick={() => setActiveTab("sql")}>Execute SQL</div>
-          </div>
-
-          {/* Main Area */}
-          <div style={s.mainArea}>
-            {!db ? (
-              /* Welcome screen */
-              <div style={s.welcome}>
-                <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#b0b0b0" strokeWidth="2">
-                  <ellipse cx="32" cy="16" rx="22" ry="8"/>
-                  <path d="M10 16v32c0 4.4 9.8 8 22 8s22-3.6 22-8V16"/>
-                  <path d="M10 28c0 4.4 9.8 8 22 8s22-3.6 22-8"/>
-                  <path d="M10 40c0 4.4 9.8 8 22 8s22-3.6 22-8"/>
-                </svg>
-                <div style={{ fontSize: "18px", fontWeight: "600", color: c.text }}>SQLite Lite Editor</div>
-                <div style={{ maxWidth: "420px", lineHeight: "1.6" }}>
-                  Click <strong>New Database</strong> to create a new database, or <strong>Open Database</strong> to open an existing <code>.db</code> file from your device.
-                  <br/><br/>
-                  <span style={{ fontSize: "11px" }}>Everything runs locally in your browser. Your data never leaves this device.</span>
-                </div>
-              </div>
-
-            ) : activeTab === "structure" ? (
-              /* Database Structure Tab */
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <div style={{ flex: 1, overflowY: "auto" }}>
-                  <TreeSection label="Tables" icon={<IconTable />} items={tables} stateKey="tables"
-                    renderItem={(name, i) => (
-                      <div key={i}>
-                        <div style={{ ...s.treeItem, fontWeight: "500" }}
-                          onClick={() => { setBrowseTable(name); setActiveTab("browse"); }}>
-                          <IconTable /> {name}{" "}
-                          <span style={{ color: c.textMuted, fontSize: "11px" }}>
-                            ({(tableColumns[name] || []).length} cols)
-                          </span>
-                        </div>
-                        {tableColumns[name]?.map((col, ci) => (
-                          <div key={ci} style={s.treeCol}>
-                            {col.pk ? "\uD83D\uDD11 " : ""}{col.name}{" "}
-                            <span style={{ color: "#888" }}>{col.type}</span>
-                            {col.notnull ? <span style={{ color: "#c06000", marginLeft: 4, fontSize: "10px" }}>NOT NULL</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  />
-                  <TreeSection label="Indexes" icon={<IconIndex />} items={indexes} stateKey="indexes"
-                    renderItem={(name, i) => (
-                      <div key={i} style={s.treeItem}><IconIndex /> {name}</div>
-                    )}
-                  />
-                  <TreeSection label="Views" icon={<IconView />} items={views} stateKey="views"
-                    renderItem={(name, i) => (
-                      <div key={i} style={s.treeItem}><IconView /> {name}</div>
-                    )}
-                  />
-                  <TreeSection label="Triggers" icon={<IconTrigger />} items={triggers} stateKey="triggers"
-                    renderItem={(name, i) => (
-                      <div key={i} style={s.treeItem}><IconTrigger /> {name}</div>
-                    )}
-                  />
-                </div>
-
-                <div style={{ borderTop: "1px solid " + c.gridBorder, padding: "10px", background: "#fafbfc", maxHeight: "40%", overflowY: "auto" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "600", marginBottom: "6px" }}>Schema Overview</div>
-                  <table style={{ ...s.gridTable, fontSize: "11px" }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...s.gridTh, fontSize: "11px" }}>Type</th>
-                        <th style={{ ...s.gridTh, fontSize: "11px" }}>Name</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tables.map((t, i) => <tr key={"t"+i} style={{ background: i % 2 ? c.gridRowAlt : "transparent" }}><td style={s.gridTd}>table</td><td style={s.gridTd}>{t}</td></tr>)}
-                      {indexes.map((t, i) => <tr key={"i"+i}><td style={s.gridTd}>index</td><td style={s.gridTd}>{t}</td></tr>)}
-                      {views.map((t, i) => <tr key={"v"+i}><td style={s.gridTd}>view</td><td style={s.gridTd}>{t}</td></tr>)}
-                      {triggers.map((t, i) => <tr key={"r"+i}><td style={s.gridTd}>trigger</td><td style={s.gridTd}>{t}</td></tr>)}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            ) : activeTab === "browse" ? (
-              /* Browse Data Tab */
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <div style={s.browseToolbar}>
-                  <label style={{ fontSize: "12px", fontWeight: "600" }}>Table:</label>
-                  <select style={s.select} value={browseTable}
-                    onChange={(e) => { setBrowseTable(e.target.value); setBrowseFilter(""); }}>
-                    {tables.map(t => <option key={t} value={t}>{t}</option>)}
-                    {views.map(v => <option key={v} value={v}>{v} (view)</option>)}
-                  </select>
-                  <div style={s.toolSep} />
-                  <label style={{ fontSize: "12px" }}>Filter:</label>
-                  <input style={s.filterInput}
-                    placeholder="e.g. age > 25 AND name LIKE '%John%'"
-                    value={browseFilter}
-                    onChange={(e) => setBrowseFilter(e.target.value)} />
-                </div>
-                {browseData.error ? (
-                  <div style={s.msgBox("error")}>Filter error: {browseData.error}</div>
-                ) : (
-                  <DataGrid columns={browseData.columns} rows={browseData.rows} />
-                )}
-                <div style={s.statusBar}>
-                  <span>{browseData.rows.length} row{browseData.rows.length !== 1 ? "s" : ""}{browseData.rows.length >= 1000 ? " (limited to 1000)" : ""}</span>
-                  <span>{browseTable}</span>
-                </div>
-              </div>
-
-            ) : activeTab === "sql" ? (
-              /* Execute SQL Tab */
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <div style={s.sqlToolbar}>
-                  <button style={s.runBtn} onClick={handleRunSql} title="Execute SQL (Ctrl+Enter)">
-                    <IconPlay /> Run SQL
-                  </button>
-                  <span style={{ fontSize: "11px", color: c.textMuted }}>Ctrl+Enter to run</span>
-                </div>
-                <textarea
-                  ref={sqlTextareaRef}
-                  style={s.sqlEditor}
-                  value={sqlText}
-                  onChange={(e) => setSqlText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={"-- Write your SQL here\n-- Press Ctrl+Enter or click 'Run SQL' to execute\n\nSELECT * FROM my_table;"}
-                  spellCheck={false}
-                />
-                <div style={{ flex: 1, overflow: "auto", minHeight: "100px", borderTop: "1px solid " + c.gridBorder }}>
-                  {queryError ? (
-                    <div style={s.msgBox("error")}>Error: {queryError}</div>
-                  ) : queryResults && queryResults.length === 0 ? (
-                    <div style={s.msgBox("success")}>Query executed successfully. No rows returned.</div>
-                  ) : queryResults ? (
-                    queryResults.map((result, ri) => (
-                      <div key={ri}>
-                        {ri > 0 && <div style={{ borderTop: "2px solid " + c.accent, margin: "4px 0" }} />}
-                        <DataGrid columns={result.columns} rows={result.values} />
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ padding: "20px", color: c.textMuted, textAlign: "center", fontSize: "12px" }}>
-                      Results will appear here after running a query.
-                    </div>
-                  )}
-                </div>
-                {/* Execution status log */}
-                {(queryResults || queryError) && (
-                  <div style={{
-                    padding: "8px 12px", background: "#f5f5f0",
-                    borderTop: "1px solid " + c.gridBorder,
-                    fontFamily: "'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace",
-                    fontSize: "12px", lineHeight: "1.6", color: c.text,
-                    flexShrink: 0, whiteSpace: "pre-wrap",
-                    maxHeight: "120px", overflowY: "auto",
-                  }}>
-                    {queryError ? (
-                      <span style={{ color: c.errorText }}>{"Execution finished with errors.\n"}{queryError}</span>
-                    ) : (
-                      <React.Fragment>
-                        <span>Execution finished without errors.</span>{"\n"}
-                        <span>Result: {queryResults.reduce((sum, r) => sum + (r.values?.length || 0), 0)} rows returned in {queryTime != null ? Math.round(queryTime) + "ms" : "\u2014"}</span>{"\n"}
-                        <span style={{ color: c.textMuted }}>At line 1:{"\n"}{sqlText.trim()}</span>
-                      </React.Fragment>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Bottom Status Bar */}
-          <div style={{ ...s.statusBar, margin: "0 8px 4px 8px", borderRadius: "0 0 4px 4px",
-            border: "1px solid " + c.gridBorder, borderTop: "none" }}>
-            <span>SQLite Lite Editor</span>
-            <span>{db ? tables.length + " table" + (tables.length !== 1 ? "s" : "") : "No database"}</span>
-          </div>
+        <!-- Toolbar -->
+        <div style=${sToolbar}>
+          <button style=${sToolBtn} onClick=${handleNewDb}><${IconNew} /> New Database</button>
+          <button style=${sToolBtn} onClick=${handleOpenDb}><${IconFolder} /> Open Database</button>
+          <div style=${sToolSep} />
+          <button style=${{ ...sToolBtn, opacity: db ? 1 : 0.4 }} onClick=${handleSaveDb} disabled=${!db}><${IconSave} /> Write Changes</button>
+          <div style=${{ marginLeft: "auto", fontSize: "12px", color: c.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "300px" }}>${dbName || "No database loaded"}</div>
         </div>
-      );
+
+        <!-- Tab Bar -->
+        <div style=${{ display: "flex", gap: "0px", padding: "0 8px", paddingTop: "6px", background: c.bg, flexShrink: 0 }}>
+          <div style=${tabStyle(activeTab === "structure")} onClick=${function() { setActiveTab("structure"); }}>Database Structure</div>
+          <div style=${tabStyle(activeTab === "browse")} onClick=${function() { setActiveTab("browse"); }}>Browse Data</div>
+          <div style=${tabStyle(activeTab === "sql")} onClick=${function() { setActiveTab("sql"); }}>Execute SQL</div>
+        </div>
+
+        <!-- Main Area -->
+        <div style=${{ flex: 1, display: "flex", flexDirection: "column", background: c.panelBg, border: "1px solid " + c.tabBorder, margin: "0 8px 8px 8px", borderRadius: "0 0 4px 4px", overflow: "hidden" }}>
+
+          ${!db ? html`
+            <!-- Welcome Screen -->
+            <div style=${{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", color: c.textMuted, padding: "40px", textAlign: "center" }}>
+              <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#b0b0b0" strokeWidth="2">
+                <ellipse cx="32" cy="16" rx="22" ry="8"/>
+                <path d="M10 16v32c0 4.4 9.8 8 22 8s22-3.6 22-8V16"/>
+                <path d="M10 28c0 4.4 9.8 8 22 8s22-3.6 22-8"/>
+                <path d="M10 40c0 4.4 9.8 8 22 8s22-3.6 22-8"/>
+              </svg>
+              <div style=${{ fontSize: "18px", fontWeight: 600, color: c.text }}>SQLite Lite Editor</div>
+              <div style=${{ maxWidth: "420px", lineHeight: "1.6" }}>
+                Click <strong>New Database</strong> to create a new database, or <strong>Open Database</strong> to open an existing <code>.db</code> file from your device.
+                <br /><br />
+                <span style=${{ fontSize: "11px" }}>Everything runs locally in your browser. Your data never leaves this device.</span>
+              </div>
+            </div>
+
+          ` : activeTab === "structure" ? html`
+            <!-- Database Structure Tab -->
+            <div style=${{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style=${{ flex: 1, overflowY: "auto" }}>
+
+                <${TreeSection} label="Tables" icon=${html`<${IconTable}/>`} items=${tables} open=${treeOpen.tables}
+                  onToggle=${function() { setTreeOpen(function(p) { return Object.assign({}, p, { tables: !p.tables }); }); }}
+                  renderItem=${function(name, i) {
+                    var cols = tableColumns[name] || [];
+                    return html`<div key=${i}>
+                      <div style=${{ display: "flex", alignItems: "center", gap: "6px", padding: "3px 10px 3px 28px", fontSize: "12px", cursor: "pointer", color: c.text, fontWeight: 500 }}
+                        onClick=${function() { setBrowseTable(name); setActiveTab("browse"); }}>
+                        <${IconTable} /> ${name} <span style=${{ color: c.textMuted, fontSize: "11px" }}>(${cols.length} cols)</span>
+                      </div>
+                      ${cols.map(function(col, ci) {
+                        return html`<div key=${ci} style=${{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 10px 2px 46px", fontSize: "11px", color: c.textMuted }}>
+                          ${col.pk ? "\uD83D\uDD11 " : ""}${col.name} <span style=${{ color: "#888" }}>${col.type}</span>
+                          ${col.notnull ? html`<span style=${{ color: "#c06000", marginLeft: 4, fontSize: "10px" }}>NOT NULL</span>` : null}
+                        </div>`;
+                      })}
+                    </div>`;
+                  }} />
+
+                <${TreeSection} label="Indexes" icon=${html`<${IconIndex}/>`} items=${indexes} open=${treeOpen.indexes}
+                  onToggle=${function() { setTreeOpen(function(p) { return Object.assign({}, p, { indexes: !p.indexes }); }); }}
+                  renderItem=${function(name, i) { return html`<div key=${i} style=${{ display: "flex", alignItems: "center", gap: "6px", padding: "3px 10px 3px 28px", fontSize: "12px", cursor: "pointer", color: c.text }}><${IconIndex}/> ${name}</div>`; }} />
+
+                <${TreeSection} label="Views" icon=${html`<${IconView}/>`} items=${views} open=${treeOpen.views}
+                  onToggle=${function() { setTreeOpen(function(p) { return Object.assign({}, p, { views: !p.views }); }); }}
+                  renderItem=${function(name, i) { return html`<div key=${i} style=${{ display: "flex", alignItems: "center", gap: "6px", padding: "3px 10px 3px 28px", fontSize: "12px", cursor: "pointer", color: c.text }}><${IconView}/> ${name}</div>`; }} />
+
+                <${TreeSection} label="Triggers" icon=${html`<${IconTrigger}/>`} items=${triggers} open=${treeOpen.triggers}
+                  onToggle=${function() { setTreeOpen(function(p) { return Object.assign({}, p, { triggers: !p.triggers }); }); }}
+                  renderItem=${function(name, i) { return html`<div key=${i} style=${{ display: "flex", alignItems: "center", gap: "6px", padding: "3px 10px 3px 28px", fontSize: "12px", cursor: "pointer", color: c.text }}><${IconTrigger}/> ${name}</div>`; }} />
+
+              </div>
+
+              <div style=${{ borderTop: "1px solid " + c.gridBorder, padding: "10px", background: "#fafbfc", maxHeight: "40%", overflowY: "auto" }}>
+                <div style=${{ fontSize: "12px", fontWeight: 600, marginBottom: "6px" }}>Schema Overview</div>
+                <table style=${{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+                  <thead><tr>
+                    <th style=${{ position: "sticky", top: 0, background: c.gridHeader, padding: "5px 10px", textAlign: "left", fontWeight: 600, borderBottom: "2px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "11px" }}>Type</th>
+                    <th style=${{ position: "sticky", top: 0, background: c.gridHeader, padding: "5px 10px", textAlign: "left", fontWeight: 600, borderBottom: "2px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "11px" }}>Name</th>
+                  </tr></thead>
+                  <tbody>
+                    ${tables.map(function(t, i) { return html`<tr key=${"t"+i} style=${{ background: i % 2 ? c.gridRowAlt : "transparent" }}><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>table</td><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>${t}</td></tr>`; })}
+                    ${indexes.map(function(t, i) { return html`<tr key=${"i"+i}><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>index</td><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>${t}</td></tr>`; })}
+                    ${views.map(function(t, i) { return html`<tr key=${"v"+i}><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>view</td><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>${t}</td></tr>`; })}
+                    ${triggers.map(function(t, i) { return html`<tr key=${"r"+i}><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>trigger</td><td style=${{ padding: "3px 10px", borderBottom: "1px solid " + c.gridBorder, borderRight: "1px solid " + c.gridBorder, fontSize: "12px" }}>${t}</td></tr>`; })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          ` : activeTab === "browse" ? html`
+            <!-- Browse Data Tab -->
+            <div style=${{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style=${{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: c.toolbarBg, borderBottom: "1px solid " + c.gridBorder, flexShrink: 0 }}>
+                <label style=${{ fontSize: "12px", fontWeight: 600 }}>Table:</label>
+                <select style=${{ padding: "3px 8px", border: "1px solid " + c.btnBorder, borderRadius: "3px", fontSize: "12px", background: "#fff", color: c.text }}
+                  value=${browseTable} onChange=${function(e) { setBrowseTable(e.target.value); setBrowseFilter(""); }}>
+                  ${tables.map(function(t) { return html`<option key=${t} value=${t}>${t}</option>`; })}
+                  ${views.map(function(v) { return html`<option key=${v} value=${v}>${v} (view)</option>`; })}
+                </select>
+                <div style=${sToolSep} />
+                <label style=${{ fontSize: "12px" }}>Filter:</label>
+                <input style=${{ flex: 1, padding: "3px 8px", border: "1px solid " + c.btnBorder, borderRadius: "3px", fontSize: "12px", color: c.text, maxWidth: "400px" }}
+                  placeholder="e.g. age > 25 AND name LIKE '%John%'"
+                  value=${browseFilter} onChange=${function(e) { setBrowseFilter(e.target.value); }} />
+              </div>
+              ${browseData.error
+                ? html`<div style=${msgBox("error")}>Filter error: ${browseData.error}</div>`
+                : html`<${DataGrid} columns=${browseData.columns} rows=${browseData.rows} />`
+              }
+              <div style=${sStatusBar}>
+                <span>${browseData.rows.length} row${browseData.rows.length !== 1 ? "s" : ""}${browseData.rows.length >= 1000 ? " (limited to 1000)" : ""}</span>
+                <span>${browseTable}</span>
+              </div>
+            </div>
+
+          ` : activeTab === "sql" ? html`
+            <!-- Execute SQL Tab -->
+            <div style=${{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style=${{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 8px", background: c.toolbarBg, borderBottom: "1px solid " + c.gridBorder, flexShrink: 0 }}>
+                <button style=${{ display: "flex", alignItems: "center", gap: "5px", padding: "4px 14px", border: "1px solid " + c.accent, borderRadius: "3px", background: c.accent, color: "#fff", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}
+                  onClick=${handleRunSql}><${IconPlay} /> Run SQL</button>
+                <span style=${{ fontSize: "11px", color: c.textMuted }}>Ctrl+Enter to run</span>
+              </div>
+              <${SqlEditor} value=${sqlText} onChange=${setSqlText} onRun=${handleRunSql} />
+              <div style=${{ flex: 1, overflow: "auto", minHeight: "100px", borderTop: "1px solid " + c.gridBorder }}>
+                ${queryError
+                  ? html`<div style=${msgBox("error")}>Error: ${queryError}</div>`
+                  : queryResults && queryResults.length === 0
+                    ? html`<div style=${msgBox("success")}>Query executed successfully. No rows returned.</div>`
+                    : queryResults
+                      ? queryResults.map(function(result, ri) {
+                          return html`<div key=${ri}>
+                            ${ri > 0 ? html`<div style=${{ borderTop: "2px solid " + c.accent, margin: "4px 0" }} />` : null}
+                            <${DataGrid} columns=${result.columns} rows=${result.values} />
+                          </div>`;
+                        })
+                      : html`<div style=${{ padding: "20px", color: c.textMuted, textAlign: "center", fontSize: "12px" }}>Results will appear here after running a query.</div>`
+                }
+              </div>
+              ${(queryResults || queryError) ? html`
+                <div style=${{ padding: "8px 12px", background: "#f5f5f0", borderTop: "1px solid " + c.gridBorder, fontFamily: "'Consolas', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace", fontSize: "12px", lineHeight: "1.6", color: c.text, flexShrink: 0, whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
+                  ${queryError
+                    ? html`<span style=${{ color: c.errorText }}>Execution finished with errors.\n${queryError}</span>`
+                    : html`<span>Execution finished without errors.</span>${"\n"}<span>Result: ${queryResults.reduce(function(sum, r) { return sum + (r.values ? r.values.length : 0); }, 0)} rows returned in ${queryTime != null ? Math.round(queryTime) + "ms" : "\u2014"}</span>${"\n"}<span style=${{ color: c.textMuted }}>At line 1:\n${sqlText.trim()}</span>`
+                  }
+                </div>
+              ` : null}
+            </div>
+          ` : null}
+
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <div style=${{ ...sStatusBar, margin: "0 8px 4px 8px", borderRadius: "0 0 4px 4px", border: "1px solid " + c.gridBorder, borderTop: "none" }}>
+          <span>SQLite Lite Editor</span>
+          <span>${db ? tables.length + " table" + (tables.length !== 1 ? "s" : "") : "No database"}</span>
+        </div>
+      </div>`;
     }
 
-    // Mount the app
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<App />);
+    // Mount
+    ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);
   </script>
 </body>
 </html>
